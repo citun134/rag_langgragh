@@ -9,7 +9,7 @@ from .nodes import (summarize_history, rewrite_query, request_clarification,
                     route_after_rewrite,
                     )
 from .state import State, AgentState
-from .tools import retrieve_hybrid_context
+from .tools import retrieve_hybrid_context, get_vietnam_stock_price
 
 # =========================================================
 # WRAP NODES FOR TIMING
@@ -49,7 +49,14 @@ checkpointer = InMemorySaver()
 
 agent_builder = StateGraph(AgentState)
 agent_builder.add_node("orchestrator", orchestrator)
-agent_builder.add_node("tools", ToolNode([retrieve_hybrid_context]))
+# agent_builder.add_node("tools", ToolNode([retrieve_hybrid_context]))
+agent_builder.add_node(
+    "tools",
+    ToolNode([
+        retrieve_hybrid_context,
+        get_vietnam_stock_price,
+    ])
+)
 agent_builder.add_node("answer_from_context", answer_from_context)
 agent_builder.add_node("fallback_response", fallback_response)
 agent_builder.add_node("collect_answer", collect_answer)

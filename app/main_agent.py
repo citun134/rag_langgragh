@@ -68,7 +68,8 @@ def main():
     # add_pdf_to_db(pdf_path)
 
     # user_query = "Tiêu chí đánh giá của phát hiện bất thường trên lá cà chua là gì"
-    user_query = "xoài là gì"
+    # user_query = "xoài là gì"
+    user_query = "giá cổ phiếu FPT ngày 2026-04-28 là bao nhiêu"
 
     # # ── (A) Xem context_data thuần trước khi qua agent ───────────────────────
     # print("=" * 60)

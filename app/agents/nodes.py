@@ -1,3 +1,4 @@
+import re
 import json
 import uuid
 from typing import Literal
@@ -14,7 +15,7 @@ from langchain_core.messages import (
 from app.agents.state import State, AgentState, QueryAnalysis
 from app.config.prompts import *
 
-from app.agents.tools import retrieve_hybrid_context  # noqa: E402
+from app.agents.tools import retrieve_hybrid_context, get_vietnam_stock_price
 from app.llms.qwen_hf import QwenHFChat  # hoặc đường dẫn thực tế trong project của bạn
 
 MAX_TOOL_CALLS = 3
@@ -26,7 +27,11 @@ llm = QwenHFChat(
     max_new_tokens=450,
 )
 
-llm_with_tools = llm.bind_tools([retrieve_hybrid_context])
+# llm_with_tools = llm.bind_tools([retrieve_hybrid_context])
+llm_with_tools = llm.bind_tools([
+    retrieve_hybrid_context,
+    get_vietnam_stock_price,
+])
 
 
 # =========================================================
@@ -37,6 +42,89 @@ REWRITE_MAX_LEN = 120
 REWRITE_MULTI_CLAUSE_MARKERS = [
     " và ", " hoặc ", " rồi ", " sau đó ", ",", ";", " bao gồm ", " gồm "
 ]
+
+# =========================================================
+# HELPERS VNSTOCK
+# =========================================================
+STOCK_QUERY_MARKERS = [
+    "cổ phiếu",
+    "co phieu",
+    "chứng khoán",
+    "chung khoan",
+    "giá",
+    "gia",
+    "ohlcv",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "khối lượng",
+    "khoi luong",
+    "mã",
+    "ma",
+    "vnindex",
+    "hnxindex",
+    "upcomindex",
+]
+
+DATE_PATTERN = r"\b\d{4}-\d{2}-\d{2}\b"
+
+
+def _looks_like_stock_query(text: str) -> bool:
+    t = str(text or "").lower()
+
+    has_stock_marker = any(marker in t for marker in STOCK_QUERY_MARKERS)
+    has_date = re.search(DATE_PATTERN, t) is not None
+
+    # Ví dụ: "giá FPT ngày 2024-05-24"
+    # Có marker giá + có ngày thì gần như chắc là stock query.
+    return has_stock_marker and has_date
+
+
+def _extract_stock_args_rule_based(text: str) -> dict:
+    """
+    Extract đơn giản:
+    - symbol: lấy mã viết hoa 2-10 ký tự.
+    - date: lấy YYYY-MM-DD.
+    """
+    raw = str(text or "").strip()
+    upper = raw.upper()
+
+    date_match = re.search(DATE_PATTERN, raw)
+    date = date_match.group(0) if date_match else ""
+
+    # Ưu tiên các mã phổ biến dạng viết hoa.
+    # Loại bớt các từ không phải mã.
+    blacklist = {
+        "NGAY", "NGÀY", "GIA", "GIÁ", "MA", "MÃ", "CHO", "LAY", "LẤY",
+        "CO", "CỔ", "PHIEU", "PHIẾU", "CHUNG", "CHỨNG", "KHOAN", "KHOÁN",
+        "OPEN", "HIGH", "LOW", "CLOSE", "VOLUME", "OHLCV", "KBS", "VCI",
+    }
+
+    candidates = re.findall(r"\b[A-Z]{2,10}\b", upper)
+    candidates = [c for c in candidates if c not in blacklist]
+
+    symbol = candidates[0] if candidates else ""
+
+    source = "KBS"
+    if " VCI" in f" {upper} ":
+        source = "VCI"
+    elif " KBS" in f" {upper} ":
+        source = "KBS"
+
+    mode = "previous"
+    if "đúng ngày" in raw.lower() or "dung ngay" in raw.lower() or "exact" in raw.lower():
+        mode = "exact"
+    elif "gần nhất" in raw.lower() or "gan nhat" in raw.lower() or "nearest" in raw.lower():
+        mode = "nearest"
+
+    return {
+        "symbol": symbol,
+        "date": date,
+        "source": source,
+        "mode": mode,
+    }
 
 # =========================================================
 # HELPERS
@@ -382,34 +470,133 @@ def request_clarification(state: State):
 # =========================================================
 # AGENT NODES
 # =========================================================
+# def orchestrator(state: AgentState):
+#     question = state["question"]
+#     context_summary = state.get("context_summary", "").strip()
+#
+#     if not state.get("messages"):
+#         # Detect và enrich query ngay tại đây, chỉ 1 lần
+#         q_lower = question.lower()
+#
+#         is_summary = any(m in q_lower for m in [
+#             "tóm tắt", "tổng quan", "kết luận", "summary", "overview", "phát hiện chính"
+#         ])
+#         is_enum = any(m in q_lower for m in [
+#             "gồm gì", "gồm những", "bao gồm gì", "liệt kê", "những gì", "gồm có", "nêu ra"
+#         ])
+#
+#         retrieval_query = question
+#         extra_parents = 3
+#         if is_summary:
+#             retrieval_query = f"{question} kết luận phần tóm tắt"
+#             extra_parents = 5
+#         elif is_enum:
+#             extra_parents = 4
+#
+#         human_msg = HumanMessage(content=question)
+#         forced_tool_call = _make_tool_call("retrieve_hybrid_context", {
+#             "query": retrieval_query,
+#             "max_parents": extra_parents,
+#         })
+#         ai_msg = AIMessage(content="", tool_calls=[forced_tool_call])
+#
+#         return {
+#             "messages": [human_msg, ai_msg],
+#             "tool_call_count": 1,
+#             "iteration_count": state.get("iteration_count", 0) + 1,
+#         }
+#
+#     # Second turn trở đi — để LLM quyết định
+#     sys_msg = SystemMessage(content=get_orchestrator_prompt())
+#     summary_injection = (
+#         [HumanMessage(content=f"[COMPRESSED CONTEXT FROM PRIOR RESEARCH]\n\n{context_summary}")]
+#         if context_summary else []
+#     )
+#     raw = llm_with_tools.invoke([sys_msg] + summary_injection + state["messages"])
+#     tool_calls = getattr(raw, "tool_calls", None) or []
+#     if not tool_calls:
+#         parsed = _safe_extract_json_from_text(getattr(raw, "content", "") or "")
+#         if isinstance(parsed, dict) and parsed.get("tool_name"):
+#             tool_calls = [_to_tool_call(parsed)]
+#
+#     ai_msg = AIMessage(
+#         content=getattr(raw, "content", "") or "",
+#         tool_calls=tool_calls
+#     )
+#     return {
+#         "messages": [ai_msg],
+#         "tool_call_count": len(tool_calls),
+#         "iteration_count": state.get("iteration_count", 0) + 1,
+#     }
+
 def orchestrator(state: AgentState):
     question = state["question"]
     context_summary = state.get("context_summary", "").strip()
 
     if not state.get("messages"):
-        # Detect và enrich query ngay tại đây, chỉ 1 lần
+        human_msg = HumanMessage(content=question)
+
+        # =====================================================
+        # 1) Stock query → gọi vnstock tool
+        # =====================================================
+        if _looks_like_stock_query(question):
+            stock_args = _extract_stock_args_rule_based(question)
+
+            if stock_args.get("symbol") and stock_args.get("date"):
+                forced_tool_call = _make_tool_call(
+                    "get_vietnam_stock_price",
+                    stock_args,
+                )
+
+                ai_msg = AIMessage(content="", tool_calls=[forced_tool_call])
+
+                return {
+                    "messages": [human_msg, ai_msg],
+                    "tool_call_count": 1,
+                    "iteration_count": state.get("iteration_count", 0) + 1,
+                }
+
+        # =====================================================
+        # 2) Default RAG query → giữ logic cũ
+        # =====================================================
         q_lower = question.lower()
 
         is_summary = any(m in q_lower for m in [
-            "tóm tắt", "tổng quan", "kết luận", "summary", "overview", "phát hiện chính"
+            "tóm tắt",
+            "tổng quan",
+            "kết luận",
+            "summary",
+            "overview",
+            "phát hiện chính",
         ])
+
         is_enum = any(m in q_lower for m in [
-            "gồm gì", "gồm những", "bao gồm gì", "liệt kê", "những gì", "gồm có", "nêu ra"
+            "gồm gì",
+            "gồm những",
+            "bao gồm gì",
+            "liệt kê",
+            "những gì",
+            "gồm có",
+            "nêu ra",
         ])
 
         retrieval_query = question
         extra_parents = 3
+
         if is_summary:
             retrieval_query = f"{question} kết luận phần tóm tắt"
             extra_parents = 5
         elif is_enum:
             extra_parents = 4
 
-        human_msg = HumanMessage(content=question)
-        forced_tool_call = _make_tool_call("retrieve_hybrid_context", {
-            "query": retrieval_query,
-            "max_parents": extra_parents,
-        })
+        forced_tool_call = _make_tool_call(
+            "retrieve_hybrid_context",
+            {
+                "query": retrieval_query,
+                "max_parents": extra_parents,
+            },
+        )
+
         ai_msg = AIMessage(content="", tool_calls=[forced_tool_call])
 
         return {
@@ -418,14 +605,21 @@ def orchestrator(state: AgentState):
             "iteration_count": state.get("iteration_count", 0) + 1,
         }
 
-    # Second turn trở đi — để LLM quyết định
+    # =====================================================
+    # 3) Second turn trở đi → để LLM chọn tool
+    # =====================================================
     sys_msg = SystemMessage(content=get_orchestrator_prompt())
+
     summary_injection = (
         [HumanMessage(content=f"[COMPRESSED CONTEXT FROM PRIOR RESEARCH]\n\n{context_summary}")]
-        if context_summary else []
+        if context_summary
+        else []
     )
+
     raw = llm_with_tools.invoke([sys_msg] + summary_injection + state["messages"])
+
     tool_calls = getattr(raw, "tool_calls", None) or []
+
     if not tool_calls:
         parsed = _safe_extract_json_from_text(getattr(raw, "content", "") or "")
         if isinstance(parsed, dict) and parsed.get("tool_name"):
@@ -433,8 +627,9 @@ def orchestrator(state: AgentState):
 
     ai_msg = AIMessage(
         content=getattr(raw, "content", "") or "",
-        tool_calls=tool_calls
+        tool_calls=tool_calls,
     )
+
     return {
         "messages": [ai_msg],
         "tool_call_count": len(tool_calls),
@@ -470,23 +665,124 @@ SUMMARY_MARKERS = [
 ]
 
 
+# def answer_from_context(state: AgentState):
+#     latest_payload = None
+#     for msg in reversed(state["messages"]):
+#         if isinstance(msg, ToolMessage):
+#             try:
+#                 data = json.loads(msg.content)
+#                 if isinstance(data, dict) and "final_context" in data:
+#                     latest_payload = data
+#                     break
+#             except Exception:
+#                 pass
+#
+#     if not latest_payload:
+#         return {"messages": [AIMessage(content="Không tìm thấy ngữ cảnh phù hợp.")]}
+#
+#     final_context = latest_payload.get("final_context", "")
+#     question = state.get("question", "")
+#     q_lower = question.lower()
+#
+#     is_enum = any(m in q_lower for m in ENUMERATION_MARKERS)
+#     is_summary = any(m in q_lower for m in SUMMARY_MARKERS)
+#
+#     if is_enum:
+#         answer_instruction = (
+#             "Câu hỏi yêu cầu LIỆT KÊ. Hãy trình bày ĐẦY ĐỦ từng mục từ ngữ cảnh. "
+#             "KHÔNG bỏ sót bất kỳ mục nào dù nhỏ. KHÔNG gộp hay tóm gọn. "
+#             "Giữ nguyên mọi con số, tỷ lệ phần trăm, mốc thời gian. "
+#             "Trình bày dạng danh sách gạch đầu dòng."
+#         )
+#         max_tokens = 800
+#     elif is_summary:
+#         answer_instruction = (
+#             "Câu hỏi yêu cầu TỔNG HỢP. Trình bày đầy đủ các phát hiện và kết luận. "
+#             "Không rút gọn bất kỳ điểm nào."
+#         )
+#         max_tokens = 700
+#     else:
+#         answer_instruction = (
+#             "Trả lời trực tiếp và đúng trọng tâm. "
+#             "Giữ nguyên mọi số liệu và chi tiết quan trọng."
+#         )
+#         max_tokens = 450
+#
+#     # Tăng token động theo intent
+#     llm._model.generation_config.max_new_tokens = max_tokens
+#
+#     resp = llm.invoke([
+#         SystemMessage(content=(
+#             "Bạn là trợ lý RAG. BẮT BUỘC trả lời bằng tiếng Việt. "
+#             "KHÔNG được bỏ sót thông tin khi câu hỏi yêu cầu liệt kê hoặc tổng hợp."
+#         )),
+#         HumanMessage(content=(
+#             f"Câu hỏi: {question}\n\n"
+#             f"Ngữ cảnh:\n{final_context}\n\n"
+#             f"{answer_instruction}"
+#         ))
+#     ])
+#
+#     # Reset về default
+#     llm._model.generation_config.max_new_tokens = 450
+#
+#     answer = getattr(resp, "content", str(resp)).strip()
+#     return {"messages": [AIMessage(content=answer or "Tài liệu không nêu rõ.")]}
+
 def answer_from_context(state: AgentState):
     latest_payload = None
+
     for msg in reversed(state["messages"]):
         if isinstance(msg, ToolMessage):
             try:
                 data = json.loads(msg.content)
-                if isinstance(data, dict) and "final_context" in data:
+                if isinstance(data, dict):
                     latest_payload = data
                     break
             except Exception:
                 pass
 
     if not latest_payload:
+        return {"messages": [AIMessage(content="Không tìm thấy dữ liệu phù hợp.")]}
+
+    question = state.get("question", "")
+
+    # =====================================================
+    # 1) Trả lời từ stock tool
+    # =====================================================
+    if latest_payload.get("type") == "stock_price":
+        if not latest_payload.get("ok", False):
+            error = latest_payload.get("error", "Không lấy được dữ liệu cổ phiếu.")
+            return {"messages": [AIMessage(content=error)]}
+
+        resp = llm.invoke([
+            SystemMessage(content=(
+                "Bạn là trợ lý phân tích dữ liệu chứng khoán Việt Nam. "
+                "Hãy trả lời bằng tiếng Việt, rõ ràng, ngắn gọn. "
+                "Chỉ sử dụng dữ liệu được cung cấp, không tự suy đoán, "
+                "không đưa ra khuyến nghị mua bán."
+            )),
+            HumanMessage(content=(
+                f"Câu hỏi người dùng:\n{question}\n\n"
+                f"Dữ liệu OHLCV lấy được:\n"
+                f"{json.dumps(latest_payload, ensure_ascii=False, indent=2)}\n\n"
+                "Hãy trình bày kết quả gồm: mã, ngày yêu cầu, ngày giao dịch thực tế, "
+                "open, high, low, close, volume. "
+                "Nếu ngày giao dịch thực tế khác ngày yêu cầu, hãy nói rõ lý do có thể là "
+                "ngày nghỉ/cuối tuần/không có phiên giao dịch."
+            ))
+        ])
+
+        answer = getattr(resp, "content", str(resp)).strip()
+        return {"messages": [AIMessage(content=answer)]}
+
+    # =====================================================
+    # 2) Trả lời từ RAG tool như logic cũ
+    # =====================================================
+    if "final_context" not in latest_payload:
         return {"messages": [AIMessage(content="Không tìm thấy ngữ cảnh phù hợp.")]}
 
     final_context = latest_payload.get("final_context", "")
-    question = state.get("question", "")
     q_lower = question.lower()
 
     is_enum = any(m in q_lower for m in ENUMERATION_MARKERS)
@@ -494,7 +790,8 @@ def answer_from_context(state: AgentState):
 
     if is_enum:
         answer_instruction = (
-            "Câu hỏi yêu cầu LIỆT KÊ. Hãy trình bày ĐẦY ĐỦ từng mục từ ngữ cảnh. "
+            "Câu hỏi yêu cầu LIỆT KÊ. "
+            "Hãy trình bày ĐẦY ĐỦ từng mục từ ngữ cảnh. "
             "KHÔNG bỏ sót bất kỳ mục nào dù nhỏ. KHÔNG gộp hay tóm gọn. "
             "Giữ nguyên mọi con số, tỷ lệ phần trăm, mốc thời gian. "
             "Trình bày dạng danh sách gạch đầu dòng."
@@ -513,7 +810,6 @@ def answer_from_context(state: AgentState):
         )
         max_tokens = 450
 
-    # Tăng token động theo intent
     llm._model.generation_config.max_new_tokens = max_tokens
 
     resp = llm.invoke([
@@ -528,12 +824,10 @@ def answer_from_context(state: AgentState):
         ))
     ])
 
-    # Reset về default
     llm._model.generation_config.max_new_tokens = 450
 
     answer = getattr(resp, "content", str(resp)).strip()
     return {"messages": [AIMessage(content=answer or "Tài liệu không nêu rõ.")]}
-
 
 def fallback_response(state: AgentState):
     seen = set()
