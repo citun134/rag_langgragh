@@ -534,61 +534,50 @@ def orchestrator(state: AgentState):
     context_summary = state.get("context_summary", "").strip()
 
     if not state.get("messages"):
-        human_msg = HumanMessage(content=question)
+        # ── Detect intent một lần duy nhất ──────────────────────────────
+        q_lower = question.lower()
 
-        # =====================================================
-        # 1) Stock query → gọi vnstock tool
-        # =====================================================
+        # ================================================================
+        # BRANCH 1: Stock query → gọi vnstock tool
+        # ================================================================
         if _looks_like_stock_query(question):
             stock_args = _extract_stock_args_rule_based(question)
-
             if stock_args.get("symbol") and stock_args.get("date"):
+                # Có đủ args → force gọi vnstock
+                human_msg = HumanMessage(content=question)
                 forced_tool_call = _make_tool_call(
                     "get_vietnam_stock_price",
                     stock_args,
                 )
-
                 ai_msg = AIMessage(content="", tool_calls=[forced_tool_call])
-
                 return {
                     "messages": [human_msg, ai_msg],
                     "tool_call_count": 1,
                     "iteration_count": state.get("iteration_count", 0) + 1,
                 }
+            # Thiếu symbol/date → không force, để LLM xử lý ở second turn
+            # bằng cách KHÔNG return sớm, tiếp tục xuống RAG bên dưới
 
-        # =====================================================
-        # 2) Default RAG query → giữ logic cũ
-        # =====================================================
-        q_lower = question.lower()
-
+        # ================================================================
+        # BRANCH 2: RAG query → giữ nguyên logic cũ (tốt)
+        # ================================================================
         is_summary = any(m in q_lower for m in [
-            "tóm tắt",
-            "tổng quan",
-            "kết luận",
-            "summary",
-            "overview",
-            "phát hiện chính",
+            "tóm tắt", "tổng quan", "kết luận", "summary", "overview", "phát hiện chính",
         ])
-
         is_enum = any(m in q_lower for m in [
-            "gồm gì",
-            "gồm những",
-            "bao gồm gì",
-            "liệt kê",
-            "những gì",
-            "gồm có",
-            "nêu ra",
+            "gồm gì", "gồm những", "bao gồm gì", "liệt kê",
+            "những gì", "gồm có", "nêu ra",
         ])
 
         retrieval_query = question
         extra_parents = 3
-
         if is_summary:
             retrieval_query = f"{question} kết luận phần tóm tắt"
             extra_parents = 5
         elif is_enum:
             extra_parents = 4
 
+        human_msg = HumanMessage(content=question)
         forced_tool_call = _make_tool_call(
             "retrieve_hybrid_context",
             {
@@ -596,30 +585,23 @@ def orchestrator(state: AgentState):
                 "max_parents": extra_parents,
             },
         )
-
         ai_msg = AIMessage(content="", tool_calls=[forced_tool_call])
-
         return {
             "messages": [human_msg, ai_msg],
             "tool_call_count": 1,
             "iteration_count": state.get("iteration_count", 0) + 1,
         }
 
-    # =====================================================
-    # 3) Second turn trở đi → để LLM chọn tool
-    # =====================================================
+    # ====================================================================
+    # Second turn trở đi → để LLM quyết định (giữ nguyên code cũ)
+    # ====================================================================
     sys_msg = SystemMessage(content=get_orchestrator_prompt())
-
     summary_injection = (
         [HumanMessage(content=f"[COMPRESSED CONTEXT FROM PRIOR RESEARCH]\n\n{context_summary}")]
-        if context_summary
-        else []
+        if context_summary else []
     )
-
     raw = llm_with_tools.invoke([sys_msg] + summary_injection + state["messages"])
-
     tool_calls = getattr(raw, "tool_calls", None) or []
-
     if not tool_calls:
         parsed = _safe_extract_json_from_text(getattr(raw, "content", "") or "")
         if isinstance(parsed, dict) and parsed.get("tool_name"):
@@ -629,7 +611,6 @@ def orchestrator(state: AgentState):
         content=getattr(raw, "content", "") or "",
         tool_calls=tool_calls,
     )
-
     return {
         "messages": [ai_msg],
         "tool_call_count": len(tool_calls),
