@@ -64,8 +64,8 @@ class QwenHFChat(BaseChatModel):
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
         self._model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            # torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            # dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map=self.device_map,
             low_cpu_mem_usage=True,
         )
