@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
@@ -6,6 +6,8 @@ import tempfile
 import os
 import shutil
 import traceback
+from typing import Optional
+from app.security.access_control import build_document_metadata
 
 
 # ============================================================
@@ -40,7 +42,8 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     question: str
     thread_id: str = "default"   # dùng để giữ lịch sử chat nếu graph hỗ trợ
-
+    user_id: str = "anonymous"
+    role: str = "employee"
 
 class QueryResponse(BaseModel):
     answer: str
@@ -52,30 +55,59 @@ class QueryResponse(BaseModel):
 # ─────────────────────────────────────────────
 
 @app.post("/upload-pdf", summary="Upload PDF và lưu vào vector DB")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    visibility: str = Form("private"),
+    owner_user_id: str = Form(...),
+    doc_id: Optional[str] = Form(None),
+):
     """
-    Upload file PDF, lưu tạm vào disk rồi gọi add_pdf_to_db(pdf_path).
-    Trả về thông báo thành công hoặc lỗi.
+    Upload PDF with access metadata.
+
+    visibility:
+    - public
+    - internal
+    - confidential
+    - private
+
+    private:
+    - only owner_user_id can retrieve it.
     """
+
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF (.pdf)")
 
-    # Lưu file tạm
+    try:
+        access_metadata = build_document_metadata(
+            doc_id=doc_id,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
 
     try:
-        add_pdf_to_db(tmp_path)
+        add_pdf_to_db(
+            tmp_path,
+            access_metadata=access_metadata,
+        )
+
         return {
             "status": "success",
             "message": f"Đã lưu '{file.filename}' vào DB thành công.",
             "filename": file.filename,
+            "metadata": access_metadata,
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý PDF: {str(e)}")
+
     finally:
-        os.unlink(tmp_path)   # xoá file tạm dù thành công hay thất bại
+        os.unlink(tmp_path)
 
 
 # ─────────────────────────────────────────────
@@ -89,6 +121,8 @@ async def query_rag(request: QueryRequest):
             {
                 "question": request.question,
                 "messages": [HumanMessage(content=request.question)],
+                "user_id": request.user_id,
+                "role": request.role,
             },
             config={"configurable": {"thread_id": request.thread_id}},
         )

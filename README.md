@@ -426,8 +426,41 @@ data/markdown/
 
 ---
 
+## 11. Evaluate RAG
 
-## 11. License
+This repo includes a lightweight offline evaluator for the current parent-child hybrid RAG pipeline.
+
+Run retrieval/context evaluation:
+
+```bash
+uv run python -m app.evaluation.rag_evaluate --dataset data/eval/rag_eval_sample.jsonl
+```
+
+Fast smoke test without loading the reranker:
+
+```bash
+uv run python -m app.evaluation.rag_evaluate --dataset data/eval/rag_eval_sample.jsonl --no-rerank
+```
+
+Run full evaluation, including the LangGraph agent answer:
+
+```bash
+uv run python -m app.evaluation.rag_evaluate --dataset data/eval/rag_eval_sample.jsonl --run-agent
+```
+
+Reports are written to:
+
+```text
+data/eval/rag_eval_report.json
+data/eval/rag_eval_report.csv
+```
+
+Create your own JSONL dataset with fields such as `question`, `expected_parent_ids`, `expected_doc_ids`, `expected_keywords`, and optional `expected_answer`.
+
+---
+
+
+## 12. License
 
 No license has been specified yet.
 
@@ -439,7 +472,6 @@ If this is an open-source project, consider adding a `LICENSE` file such as:
 
 ---
 
-## 12. Author
+## 13. Author
 
 Maintained by `citun134`.
-

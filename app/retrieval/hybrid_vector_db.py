@@ -1,7 +1,5 @@
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
-from langchain_qdrant import QdrantVectorStore
-from langchain_qdrant.qdrant import RetrievalMode
 
 from ..embeddings.hf_embeddings import dense_embeddings
 

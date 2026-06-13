@@ -28,7 +28,7 @@ MAX_ITERATIONS = 5
 #     temperature=0.0,
 #     max_new_tokens=450,
 # )
-link_api = "https://gpdks-136-112-52-160.run.pinggy-free.link/"
+link_api = "https://lzbwj-34-68-22-16.run.pinggy-free.link/"
 llm = KaggleAPIChat(
     api_url=link_api,
     api_key="my-secret-api-key-123",
@@ -731,101 +731,18 @@ SUMMARY_MARKERS = [
 #     return {"messages": [AIMessage(content=answer or "Tài liệu không nêu rõ.")]}
 
 
+def answer_from_context(state: AgentState):
+    latest_payload = None
 
-def _extract_latest_tool_payload(messages):
-    """Lấy JSON payload mới nhất từ ToolMessage."""
-    for msg in reversed(messages or []):
+    for msg in reversed(state["messages"]):
         if isinstance(msg, ToolMessage):
             try:
                 data = json.loads(msg.content)
                 if isinstance(data, dict):
-                    return data
+                    latest_payload = data
+                    break
             except Exception:
-                continue
-    return None
-
-
-def _invoke_llm_with_max_tokens(messages, max_tokens: int):
-    """
-    Gọi LLM với max token theo request.
-    Ưu tiên with_config để tránh sửa trực tiếp llm._model, an toàn hơn khi chạy concurrent.
-    """
-    try:
-        return llm.with_config(max_new_tokens=max_tokens).invoke(messages)
-    except Exception:
-        # Fallback tương thích với wrapper hiện tại nếu chưa hỗ trợ max_new_tokens qua config.
-        return llm.invoke(messages)
-
-
-def grade_context(state: AgentState):
-    """
-    Quality gate sau khi tool chạy.
-    - Stock tool: cho qua nếu payload hợp lệ để answer_from_context xử lý ok/error.
-    - RAG tool: chỉ cho qua khi có final_context đủ dài hoặc có results_meta.
-    """
-    payload = _extract_latest_tool_payload(state.get("messages", []))
-
-    if not payload:
-        return {
-            "context_is_sufficient": False,
-            "context_grade_reason": "Không đọc được payload từ tool.",
-            "retrieval_payload": {},
-            "sources": [],
-        }
-
-    if payload.get("type") == "stock_price":
-        return {
-            "context_is_sufficient": True,
-            "context_grade_reason": "Stock payload handled by answer node.",
-            "retrieval_payload": payload,
-            "sources": [],
-        }
-
-    final_context = str(payload.get("final_context", "") or "").strip()
-    results_meta = payload.get("results_meta", []) or []
-    sources = payload.get("sources", []) or results_meta
-
-    if not final_context:
-        return {
-            "context_is_sufficient": False,
-            "context_grade_reason": "Retrieval không trả về final_context.",
-            "retrieval_payload": payload,
-            "sources": sources,
-        }
-
-    if len(final_context) < 120 and not results_meta:
-        return {
-            "context_is_sufficient": False,
-            "context_grade_reason": "Context quá ngắn và không có source metadata đáng tin.",
-            "retrieval_payload": payload,
-            "sources": sources,
-        }
-
-    return {
-        "context_is_sufficient": True,
-        "context_grade_reason": "Context đủ để sinh câu trả lời.",
-        "retrieval_payload": payload,
-        "sources": sources,
-    }
-
-
-def route_after_context_grade(state: AgentState) -> Literal["answer_from_context", "no_context_response"]:
-    return "answer_from_context" if state.get("context_is_sufficient", False) else "no_context_response"
-
-
-def no_context_response(state: AgentState):
-    reason = state.get("context_grade_reason", "Không có context phù hợp.")
-    question = state.get("question", "")
-    msg = (
-        "Mình không tìm thấy thông tin đủ liên quan trong các tài liệu mà bạn có quyền truy cập.\n\n"
-        f"**Câu hỏi:** {question}\n"
-        f"**Lý do:** {reason}\n\n"
-        "Bạn có thể hỏi rõ tên tài liệu, phần/chương, hoặc từ khóa cụ thể hơn."
-    )
-    return {"messages": [AIMessage(content=msg)]}
-
-def answer_from_context(state: AgentState):
-    latest_payload = state.get("retrieval_payload") or _extract_latest_tool_payload(state.get("messages", []))
+                pass
 
     if not latest_payload:
         return {"messages": [AIMessage(content="Không tìm thấy dữ liệu phù hợp.")]}
@@ -895,18 +812,21 @@ def answer_from_context(state: AgentState):
         )
         max_tokens = 450
 
-    resp = _invoke_llm_with_max_tokens([
+    llm._model.generation_config.max_new_tokens = max_tokens
+
+    resp = llm.invoke([
         SystemMessage(content=(
             "Bạn là trợ lý RAG. BẮT BUỘC trả lời bằng tiếng Việt. "
-            "KHÔNG được bỏ sót thông tin khi câu hỏi yêu cầu liệt kê hoặc tổng hợp. "
-            "Chỉ dùng ngữ cảnh được cung cấp; nếu tài liệu không nêu rõ thì nói rõ."
+            "KHÔNG được bỏ sót thông tin khi câu hỏi yêu cầu liệt kê hoặc tổng hợp."
         )),
         HumanMessage(content=(
             f"Câu hỏi: {question}\n\n"
             f"Ngữ cảnh:\n{final_context}\n\n"
             f"{answer_instruction}"
         ))
-    ], max_tokens=max_tokens)
+    ])
+
+    llm._model.generation_config.max_new_tokens = 450
 
     answer = getattr(resp, "content", str(resp)).strip()
     return {"messages": [AIMessage(content=answer or "Tài liệu không nêu rõ.")]}

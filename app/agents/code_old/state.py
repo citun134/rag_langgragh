@@ -1,6 +1,6 @@
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
-from typing import List, Annotated, Set, Dict, Any
+from typing import List, Annotated, Set
 import operator
 
 def accumulate_or_reset(existing: List[dict], new: List[dict]) -> List[dict]:
@@ -30,13 +30,6 @@ class AgentState(MessagesState):
     question_index: int = 0
     context_summary: str = ""
     retrieval_keys: Annotated[Set[str], set_union] = set()
-
-    # Context quality gate
-    context_is_sufficient: bool = True
-    context_grade_reason: str = ""
-    retrieval_payload: Dict[str, Any] = {}
-    sources: List[dict] = []
-
     final_answer: str = ""
     agent_answers: List[dict] = []
     user_id: str = "anonymous"

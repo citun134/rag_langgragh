@@ -5,13 +5,6 @@ import pandas as pd
 from vnstock import Quote
 from langchain_core.tools import tool
 from datetime import datetime, timedelta
-from app.retrieval.hybrid_retriever import SmartHybridRetriever
-from app.retrieval.child_documents import (
-    DEFAULT_CHILD_DOCS_PATH as CHILD_DOCS_PATH,
-    filter_documents_by_access,
-    load_child_documents,
-    load_child_documents_from_qdrant,
-)
 
 
 # =========================================================
@@ -29,31 +22,20 @@ from app.retrieval.context_builder import (
 )
 from app.security.access_control import build_access_filter
 
+# def build_retriever(child_vector_store, k: int = 20):
+#     """Wrap vector store thành retriever có .invoke()"""
+#     return child_vector_store.as_retriever(search_kwargs={"k": k})
+def build_retriever(child_vector_store, k: int = 20, access_filter=None):
+    """
+    Wrap vector store as retriever with access filter.
+    """
 
-# def build_retriever(child_vector_store, k: int = 20, access_filter=None):
-#     """
-#     Wrap vector store as retriever with access filter.
-#     """
+    search_kwargs = {"k": k}
 
-#     search_kwargs = {"k": k}
+    if access_filter is not None:
+        search_kwargs["filter"] = access_filter
 
-#     if access_filter is not None:
-#         search_kwargs["filter"] = access_filter
-
-#     return child_vector_store.as_retriever(search_kwargs=search_kwargs)
-
-def build_retriever(
-    child_vector_store,
-    documents,
-    k: int = 20,
-    access_filter=None,
-):
-    return SmartHybridRetriever(
-        vector_store=child_vector_store,
-        documents=documents,
-        k=k,
-        search_filter=access_filter,
-    )
+    return child_vector_store.as_retriever(search_kwargs=search_kwargs)
 
 # =========================================================
 # KHỞI TẠO RETRIEVER TOÀN CỤC (dùng trong tools.py)
@@ -82,23 +64,8 @@ def get_child_hybrid_retriever(
         role=role,
     )
 
-    documents = load_child_documents(CHILD_DOCS_PATH)
-    if documents:
-        documents = filter_documents_by_access(
-            documents,
-            user_id=user_id,
-            role=role,
-        )
-    else:
-        documents = load_child_documents_from_qdrant(
-            client=client,
-            collection_name=CHILD_COLLECTION,
-            scroll_filter=access_filter,
-        )
-
     retriever = build_retriever(
         child_vector_store=child_vector_store,
-        documents=documents,
         k=k,
         access_filter=access_filter,
     )
@@ -179,46 +146,21 @@ def retrieve_hybrid_context(
         secondary_ratio_threshold=secondary_ratio_threshold,
     )
 
-    # Metadata gọn nhưng đủ để debug/source citation ở API layer
+    # Optional: keep only lightweight metadata to avoid huge tool payload
     compact_results = []
-    sources = []
     for item in results:
-        parent = item.get("parent", {}) or {}
-        meta = parent.get("metadata", {}) or {}
-        score = item.get("score", item.get("parent_rank_score_sum"))
-
         compact_results.append({
             "parent_id": item.get("parent_id"),
-            "score": score,
-            "child_preview": str(item.get("best_child_text", ""))[:500],
-        })
-
-        sources.append({
-            "doc_id": meta.get("doc_id"),
-            "source": meta.get("source"),
-            "source_md": meta.get("source_md"),
-            "file_name": meta.get("file_name") or meta.get("filename"),
-            "parent_id": item.get("parent_id"),
-            "score": score,
-            "visibility": meta.get("visibility"),
+            "score": item.get("score"),
+            "child_preview": str(item.get("best_child_text", ""))[:500]
         })
 
     payload = {
-        "type": "rag_context",
-        "ok": bool(context_data.get("final_context", "")),
         "query": query,
         "main_context": context_data.get("main_context", ""),
         "secondary_context": context_data.get("secondary_context", ""),
         "final_context": context_data.get("final_context", ""),
         "results_meta": compact_results,
-        "sources": sources,
-        "debug": {
-            "user_id": user_id,
-            "role": role,
-            "max_parents": max_parents,
-            "max_secondary_parents": max_secondary_parents,
-            "secondary_ratio_threshold": secondary_ratio_threshold,
-        },
     }
 
     return json.dumps(payload, ensure_ascii=False)

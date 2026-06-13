@@ -11,6 +11,8 @@ def run_agent(
     thread_id: str | None = None,
     recursion_limit: int = 50,
     debug_messages: bool = False,
+    user_id: str = "anonymous",
+    role: str = "employee",
 ) -> str:
     """
     Chạy agent_graph với một câu hỏi, trả về chuỗi câu trả lời cuối cùng.
@@ -20,6 +22,8 @@ def run_agent(
         thread_id:        ID thread cho checkpointer (None = tạo mới).
         recursion_limit:  Giới hạn đệ quy của LangGraph.
         debug_messages:   In toàn bộ message history để debug.
+        user_id:          User id dùng cho retrieval có phân quyền.
+        role:             Role dùng cho retrieval có phân quyền.
 
     Returns:
         Câu trả lời cuối cùng dạng str.
@@ -33,7 +37,11 @@ def run_agent(
     }
 
     result = agent_graph.invoke(
-        {"messages": [HumanMessage(content=user_query)]},
+        {
+            "messages": [HumanMessage(content=user_query)],
+            "user_id": user_id,
+            "role": role,
+        },
         config=config,
     )
 
@@ -67,9 +75,10 @@ def main():
     # pdf_path = r"C:\RAG_PRO\data\xoai.pdf"
     # add_pdf_to_db(pdf_path)
 
-    # user_query = "Tiêu chí đánh giá của phát hiện bất thường trên lá cà chua là gì"
+    user_query = "Tiêu chí đánh giá của phát hiện bất thường trên lá cà chua là gì"
+    # user_query = "Xoài là loại cây gì "
     # user_query = "xoài là gì"
-    user_query = "giá cổ phiếu FPT ngày 2026-04-28 là bao nhiêu"
+    # user_query = "giá cổ phiếu FPT ngày 2026-04-28 là bao nhiêu"
 
     # # ── (A) Xem context_data thuần trước khi qua agent ───────────────────────
     # print("=" * 60)

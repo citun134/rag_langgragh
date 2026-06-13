@@ -1,0 +1,204 @@
+{
+  "dataset": "data\\eval\\rag_eval_sample.jsonl",
+  "config": {
+    "child_k": 20,
+    "max_parents": 4,
+    "user_id": "anonymous",
+    "role": "admin",
+    "use_rerank": false,
+    "run_agent": false
+  },
+  "summary": {
+    "case_count": 3,
+    "metrics": {
+      "context_chars": {
+        "mean": 6926.0,
+        "count": 3
+      },
+      "context_keyword_coverage": {
+        "mean": 0.6111111111111112,
+        "count": 3
+      },
+      "parent_hit_at_k": {
+        "mean": 1.0,
+        "count": 3
+      },
+      "parent_mrr_at_k": {
+        "mean": 0.5833333333333334,
+        "count": 3
+      },
+      "parent_ndcg_at_k": {
+        "mean": 0.5582511681367697,
+        "count": 3
+      },
+      "parent_precision_at_k": {
+        "mean": 0.25,
+        "count": 3
+      },
+      "parent_recall_at_k": {
+        "mean": 0.8333333333333334,
+        "count": 3
+      },
+      "retrieved_parent_count": {
+        "mean": 4.0,
+        "count": 3
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "tomato_eval_metrics",
+      "question": "Tiêu chí đánh giá của phát hiện bất thường trên lá cà chua là gì?",
+      "metrics": {
+        "retrieved_parent_count": 4.0,
+        "context_chars": 6339.0,
+        "parent_hit_at_k": 1.0,
+        "parent_precision_at_k": 0.25,
+        "parent_recall_at_k": 0.5,
+        "parent_mrr_at_k": 1.0,
+        "parent_ndcg_at_k": 0.6131471927654584,
+        "doc_hit_at_k": null,
+        "doc_precision_at_k": null,
+        "doc_recall_at_k": null,
+        "doc_mrr_at_k": null,
+        "doc_ndcg_at_k": null,
+        "context_keyword_coverage": 0.75
+      },
+      "retrieval": {
+        "retrieved_parent_ids": [
+          "101_21011084_Tô Văn Tú_parent_00055",
+          "101_21011084_Tô Văn Tú_parent_00008",
+          "101_21011084_Tô Văn Tú_parent_00020",
+          "101_21011084_Tô Văn Tú_parent_00077"
+        ],
+        "retrieved_doc_aliases": [
+          [
+            "101_21011084_Tô Văn Tú.pdf",
+            "101_21011084_Tô Văn Tú.md"
+          ],
+          [
+            "101_21011084_Tô Văn Tú.pdf",
+            "101_21011084_Tô Văn Tú.md"
+          ],
+          [
+            "101_21011084_Tô Văn Tú.pdf",
+            "101_21011084_Tô Văn Tú.md"
+          ],
+          [
+            "101_21011084_Tô Văn Tú.pdf",
+            "101_21011084_Tô Văn Tú.md"
+          ]
+        ],
+        "main_parent_id": "101_21011084_Tô Văn Tú_parent_00055",
+        "secondary_parent_ids": [
+          "101_21011084_Tô Văn Tú_parent_00008",
+          "101_21011084_Tô Văn Tú_parent_00020"
+        ]
+      },
+      "answer": null
+    },
+    {
+      "id": "mango_definition",
+      "question": "Xoài là loại cây gì và có giá trị như thế nào?",
+      "metrics": {
+        "retrieved_parent_count": 4.0,
+        "context_chars": 3677.0,
+        "parent_hit_at_k": 1.0,
+        "parent_precision_at_k": 0.25,
+        "parent_recall_at_k": 1.0,
+        "parent_mrr_at_k": 0.25,
+        "parent_ndcg_at_k": 0.43067655807339306,
+        "doc_hit_at_k": null,
+        "doc_precision_at_k": null,
+        "doc_recall_at_k": null,
+        "doc_mrr_at_k": null,
+        "doc_ndcg_at_k": null,
+        "context_keyword_coverage": 0.3333333333333333
+      },
+      "retrieval": {
+        "retrieved_parent_ids": [
+          "nckh_2025_MinhQuang_MinhTu_VanTu_parent_00138",
+          "101_21011084_Tô Văn Tú_parent_00006",
+          "nckh_2025_MinhQuang_MinhTu_VanTu_parent_00134",
+          "xoai_parent_00002"
+        ],
+        "retrieved_doc_aliases": [
+          [
+            "nckh_2025_MinhQuang_MinhTu_VanTu.pdf",
+            "nckh_2025_MinhQuang_MinhTu_VanTu.md"
+          ],
+          [
+            "101_21011084_Tô Văn Tú.pdf",
+            "101_21011084_Tô Văn Tú.md"
+          ],
+          [
+            "nckh_2025_MinhQuang_MinhTu_VanTu.pdf",
+            "nckh_2025_MinhQuang_MinhTu_VanTu.md"
+          ],
+          [
+            "xoai.pdf",
+            "xoai.md"
+          ]
+        ],
+        "main_parent_id": "nckh_2025_MinhQuang_MinhTu_VanTu_parent_00138",
+        "secondary_parent_ids": [
+          "101_21011084_Tô Văn Tú_parent_00006",
+          "nckh_2025_MinhQuang_MinhTu_VanTu_parent_00134"
+        ]
+      },
+      "answer": null
+    },
+    {
+      "id": "mango_conclusion",
+      "question": "Kết luận chính của nghiên cứu về giống xoài là gì?",
+      "metrics": {
+        "retrieved_parent_count": 4.0,
+        "context_chars": 10762.0,
+        "parent_hit_at_k": 1.0,
+        "parent_precision_at_k": 0.25,
+        "parent_recall_at_k": 1.0,
+        "parent_mrr_at_k": 0.5,
+        "parent_ndcg_at_k": 0.6309297535714575,
+        "doc_hit_at_k": null,
+        "doc_precision_at_k": null,
+        "doc_recall_at_k": null,
+        "doc_mrr_at_k": null,
+        "doc_ndcg_at_k": null,
+        "context_keyword_coverage": 0.75
+      },
+      "retrieval": {
+        "retrieved_parent_ids": [
+          "nckh_2025_MinhQuang_MinhTu_VanTu_parent_00161",
+          "xoai_parent_00012",
+          "xoai_parent_00010",
+          "xoai_parent_00005"
+        ],
+        "retrieved_doc_aliases": [
+          [
+            "nckh_2025_MinhQuang_MinhTu_VanTu.pdf",
+            "nckh_2025_MinhQuang_MinhTu_VanTu.md"
+          ],
+          [
+            "xoai.pdf",
+            "xoai.md"
+          ],
+          [
+            "xoai.pdf",
+            "xoai.md"
+          ],
+          [
+            "xoai.pdf",
+            "xoai.md"
+          ]
+        ],
+        "main_parent_id": "nckh_2025_MinhQuang_MinhTu_VanTu_parent_00161",
+        "secondary_parent_ids": [
+          "xoai_parent_00012",
+          "xoai_parent_00010",
+          "xoai_parent_00005"
+        ]
+      },
+      "answer": null
+    }
+  ]
+}

@@ -9,7 +9,8 @@ from langchain_qdrant.qdrant import RetrievalMode
 from app.ingestion.pdf_to_markdown import MARKDOWN_DIR, PARENT_STORE_PATH, pdf_to_markdown
 from app.chunking.parent_child import make_parent_child_docs
 from app.embeddings.hf_embeddings import dense_embeddings, sparse_embeddings
-
+from app.security.access_control import build_document_metadata
+from app.retrieval.child_documents import DEFAULT_CHILD_DOCS_PATH, save_child_documents
 
 CHILD_COLLECTION = "document_child_chunks"
 QDRANT_PATH = "qdrant_db"
@@ -111,6 +112,8 @@ def index_documents_semantic_parent_child(
         print(f"🔍 Indexing {len(all_child_docs)} child chunks into Qdrant...")
         child_vector_store.add_documents(all_child_docs)
         print("✓ Child chunks indexed successfully.")
+        save_child_documents(all_child_docs, DEFAULT_CHILD_DOCS_PATH, append=False)
+        print(f"✓ Child chunks saved to {DEFAULT_CHILD_DOCS_PATH}.")
 
         print(f"💾 Saving {len(all_parent_pairs)} parent chunks to JSON...")
         save_parent_store(all_parent_pairs, parent_store_path)
@@ -132,6 +135,7 @@ def add_pdf_to_db(
     parent_store_path: Path | str = PARENT_STORE_PATH,
     collection_name: str = CHILD_COLLECTION,
     qdrant_path: str = QDRANT_PATH,
+    access_metadata: dict | None = None,
 ):
     """
     Thêm một file PDF vào DB:
@@ -168,11 +172,26 @@ def add_pdf_to_db(
         if not all_child_docs:
             print("⚠️ Không có child chunks nào được tạo.")
             return
+        ### NEW ROLE ###
+        if access_metadata is None:
+            access_metadata = build_document_metadata(
+                visibility="public",
+                owner_user_id="admin",
+            )
+
+        all_parent_pairs, all_child_docs = attach_access_metadata(
+            all_parent_pairs=all_parent_pairs,
+            all_child_docs=all_child_docs,
+            access_metadata=access_metadata,
+        )
+        ### NEW ROLE ###
 
         # Bước 4: Index child chunks
         print(f"🔍 Indexing {len(all_child_docs)} child chunks...")
         child_vector_store.add_documents(all_child_docs)
         print("✓ Child chunks đã được index.")
+        save_child_documents(all_child_docs, DEFAULT_CHILD_DOCS_PATH, append=True)
+        print(f"✓ Child chunks đã lưu vào {DEFAULT_CHILD_DOCS_PATH}.")
 
         # Bước 5: Lưu parent chunks (append vào parent store)
         parent_store_path = Path(parent_store_path)
@@ -192,6 +211,33 @@ def add_pdf_to_db(
 
     finally:
         client.close()
+
+
+def attach_access_metadata(
+    all_parent_pairs,
+    all_child_docs,
+    access_metadata: dict,
+):
+    """
+    Attach access metadata to both parent and child chunks.
+
+    This is important because Qdrant searches child chunks.
+    If child chunks do not have metadata, Qdrant cannot filter them.
+    """
+
+    access_metadata = dict(access_metadata or {})
+
+    for parent_id, parent_doc in all_parent_pairs:
+        parent_doc.metadata = dict(parent_doc.metadata or {})
+        parent_doc.metadata.update(access_metadata)
+        parent_doc.metadata["parent_id"] = parent_id
+
+    for child_doc in all_child_docs:
+        child_doc.metadata = dict(child_doc.metadata or {})
+        child_doc.metadata.update(access_metadata)
+
+    return all_parent_pairs, all_child_docs
+
 
 if __name__ == "__main__":
     index_documents_semantic_parent_child()
