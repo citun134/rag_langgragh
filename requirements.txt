@@ -135,3 +135,4 @@ zstandard==0.25.0
 sentencepiece
 accelerate
 vnstock
+datasets
