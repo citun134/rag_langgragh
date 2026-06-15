@@ -12,8 +12,13 @@ from app.embeddings.hf_embeddings import dense_embeddings, sparse_embeddings
 from app.security.access_control import build_document_metadata
 from app.retrieval.child_documents import DEFAULT_CHILD_DOCS_PATH, save_child_documents
 
-CHILD_COLLECTION = "document_child_chunks"
-QDRANT_PATH = "qdrant_db"
+from pathlib import Path
+
+from app.config.settings import settings
+
+
+CHILD_COLLECTION = settings.child_collection
+QDRANT_PATH = settings.qdrant_path
 
 
 def build_child_vector_store(
@@ -86,10 +91,10 @@ def save_parent_store(all_parent_pairs, parent_store_path: Path | str = PARENT_S
 
 
 def index_documents_semantic_parent_child(
-    markdown_dir: Path | str = MARKDOWN_DIR,
-    parent_store_path: Path | str = PARENT_STORE_PATH,
-    collection_name: str = CHILD_COLLECTION,
-    qdrant_path: str = QDRANT_PATH,
+    markdown_dir: Path | str = settings.markdown_dir,
+    parent_store_path: Path | str = settings.parent_store_path,
+    collection_name: str = settings.child_collection,
+    qdrant_path: str = settings.qdrant_path,
     recreate_collection: bool = True,
 ):
     """
@@ -131,10 +136,10 @@ def index_documents_semantic_parent_child(
 
 def add_pdf_to_db(
     pdf_path: str | Path,
-    markdown_dir: Path | str = MARKDOWN_DIR,
-    parent_store_path: Path | str = PARENT_STORE_PATH,
-    collection_name: str = CHILD_COLLECTION,
-    qdrant_path: str = QDRANT_PATH,
+    markdown_dir: Path | str = settings.markdown_dir,
+    parent_store_path: Path | str = settings.parent_store_path,
+    collection_name: str = settings.child_collection,
+    qdrant_path: str = settings.qdrant_path,
     access_metadata: dict | None = None,
 ):
     """

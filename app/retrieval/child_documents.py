@@ -11,8 +11,11 @@ from app.security.access_control import (
 )
 
 
-DEFAULT_CHILD_DOCS_PATH = Path("storage/child_docs.jsonl")
+from pathlib import Path
+from app.config.settings import settings
 
+
+DEFAULT_CHILD_DOCS_PATH = Path(settings.child_docs_path)
 
 def _doc_key(doc: Document) -> str:
     metadata = doc.metadata or {}

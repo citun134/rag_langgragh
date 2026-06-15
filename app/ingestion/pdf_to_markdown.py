@@ -1,14 +1,16 @@
 import os
 from pathlib import Path
-
 import pymupdf
 import pymupdf4llm
 
+from app.config.settings import settings
+
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-DOCS_DIR = BASE_DIR / "data"
-MARKDOWN_DIR = BASE_DIR / "markdown"
-PARENT_STORE_PATH = BASE_DIR / "parent_store"
+
+DOCS_DIR = Path(settings.pdf_dir)
+MARKDOWN_DIR = Path(settings.markdown_dir)
+PARENT_STORE_PATH = Path(settings.parent_store_path)
 
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(MARKDOWN_DIR, exist_ok=True)

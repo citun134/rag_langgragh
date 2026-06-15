@@ -155,11 +155,13 @@ def retrieve_parent_docs_by_hybrid(
 
     # ← THÊM BƯỚC RERANK NÀY
     if use_rerank and len(child_docs) > 3:
-        candidate_size = max(
-            RERANK_MIN_CANDIDATES,  # = 12 (đã có sẵn trong config)
-            len(child_docs) * RERANK_CANDIDATE_MULTIPLIER // 4  # lấy top ~N*4 để rerank
+        RERANK_TOP_K = 25
+        child_docs = rerank_child_docs(
+            query=query,
+            child_docs=child_docs,
+            top_k=RERANK_TOP_K,
+            batch_size=16,
         )
-        child_docs = rerank_child_docs(query, child_docs[:candidate_size])
 
     idf_weights = _build_query_idf_weights(query, child_docs)
 

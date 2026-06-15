@@ -20,6 +20,8 @@ from app.llms.qwen_hf import QwenHFChat  # hoặc đường dẫn thực tế tr
 from app.llms.kaggle_api_chat import KaggleAPIChat
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from app.config.settings import settings
+
 MAX_TOOL_CALLS = 3
 MAX_ITERATIONS = 5
 
@@ -28,12 +30,13 @@ MAX_ITERATIONS = 5
 #     temperature=0.0,
 #     max_new_tokens=450,
 # )
-link_api = "https://gpdks-136-112-52-160.run.pinggy-free.link/"
+link_api = "https://qsxgn-34-45-161-206.run.pinggy-free.link/"
 llm = KaggleAPIChat(
-    api_url=link_api,
-    api_key="my-secret-api-key-123",
-    temperature=0.0,
-    max_new_tokens=300,
+    api_url=settings.kaggle_api_url,
+    api_key=settings.kaggle_api_key,
+    # model_name=settings.llm_model_name,
+    temperature=settings.llm_temperature,
+    max_new_tokens=settings.llm_max_new_tokens,
 )
 
 # llm_with_tools = llm.bind_tools([retrieve_hybrid_context])

@@ -13,6 +13,7 @@ from app.retrieval.child_documents import (
     load_child_documents_from_qdrant,
 )
 
+from app.config.settings import settings
 
 # =========================================================
 # RETRIEVAL SETUP
@@ -30,18 +31,6 @@ from app.retrieval.context_builder import (
 from app.security.access_control import build_access_filter
 
 
-# def build_retriever(child_vector_store, k: int = 20, access_filter=None):
-#     """
-#     Wrap vector store as retriever with access filter.
-#     """
-
-#     search_kwargs = {"k": k}
-
-#     if access_filter is not None:
-#         search_kwargs["filter"] = access_filter
-
-#     return child_vector_store.as_retriever(search_kwargs=search_kwargs)
-
 def build_retriever(
     child_vector_store,
     documents,
@@ -58,14 +47,6 @@ def build_retriever(
 # =========================================================
 # KHỞI TẠO RETRIEVER TOÀN CỤC (dùng trong tools.py)
 # =========================================================
-# def get_child_hybrid_retriever(k: int = 20):
-#     client, child_vector_store = build_child_vector_store(
-#         collection_name=CHILD_COLLECTION,
-#         qdrant_path=QDRANT_PATH,
-#         recreate=False,
-#     )
-#     retriever = build_retriever(child_vector_store, k=k)
-#     return client, retriever
 def get_child_hybrid_retriever(
     k: int = 20,
     user_id: str = "anonymous",
@@ -117,24 +98,16 @@ def _to_tool_call(parsed: dict):
         "type": "tool_call",
     }
 
-def _make_tool_call(name: str, args: dict):
-    return {
-        "name": name,
-        "args": args or {},
-        "id": str(uuid.uuid4()),
-        "type": "tool_call",
-    }
-
 @tool
 def retrieve_hybrid_context(
     query: str,
     user_id: str = "anonymous",
     role: str = "employee",
-    max_parents: int = 3,
-    rank_constant: int = 20,
+    max_parents: int = settings.top_k_parent,
+    rank_constant: int = settings.rank_constant,
     use_secondary_context: bool = True,
-    max_secondary_parents: int = 1,
-    secondary_ratio_threshold: float = 0.55,
+    max_secondary_parents: int = settings.max_secondary_parents,
+    secondary_ratio_threshold: float = settings.secondary_ratio_threshold,
 ) -> str:
     """Retrieve relevant document context using hybrid search for a given query."""
     q_lower = query.lower()
@@ -144,18 +117,22 @@ def retrieve_hybrid_context(
         "gồm gì", "gồm những", "bao gồm gì", "liệt kê", "những gì", "nêu ra", "gồm có"
     ])
 
+    retrieval_k = settings.top_k_child
+
     if is_summary:
-        max_parents = max(max_parents, 5)
+        max_parents = max(max_parents, settings.top_k_parent_summary)
         max_secondary_parents = 3
         secondary_ratio_threshold = 0.25
-    elif is_enum:  # ← THÊM khối này
-        max_parents = max(max_parents, 4)
+        retrieval_k = settings.top_k_child_summary
+
+    elif is_enum:
+        max_parents = max(max_parents, settings.top_k_parent_enum)
         max_secondary_parents = 2
         secondary_ratio_threshold = 0.35
+        retrieval_k = settings.top_k_child_enum
 
-    # client, child_hybrid_retriever = get_child_hybrid_retriever(k=20)
     client, child_hybrid_retriever = get_child_hybrid_retriever(
-        k=20,
+        k=retrieval_k,
         user_id=user_id,
         role=role,
     )
@@ -182,15 +159,21 @@ def retrieve_hybrid_context(
     # Metadata gọn nhưng đủ để debug/source citation ở API layer
     compact_results = []
     sources = []
+
     for item in results:
         parent = item.get("parent", {}) or {}
         meta = parent.get("metadata", {}) or {}
-        score = item.get("score", item.get("parent_rank_score_sum"))
+        children = item.get("children") or []
+        best_child = children[0] if children else {}
+
+        score = item.get("parent_rank_score_sum")
 
         compact_results.append({
             "parent_id": item.get("parent_id"),
             "score": score,
-            "child_preview": str(item.get("best_child_text", ""))[:500],
+            "best_child_score": item.get("parent_best_rank_score"),
+            "child_id": (best_child.get("metadata") or {}).get("child_id"),
+            "child_preview": str(best_child.get("page_content", ""))[:500],
         })
 
         sources.append({

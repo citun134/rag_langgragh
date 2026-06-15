@@ -10,3 +10,9 @@ __pycache__/
 markdown/
 parent_store/
 qdrant_db/
+
+storage/
+data/markdown/
+data/raw_pdfs/
+data/eval/rag_eval_report.json
+data/eval/rag_eval_report.csv

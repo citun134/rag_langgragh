@@ -9,22 +9,18 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from app.chunking.semantic_chunker import SemanticChunker
 from app.embeddings.hf_embeddings import dense_embeddings
 from app.utils.text_cleaning import clean_vietnamese_text
+from app.config.settings import settings
 
 # =========================
 # CONFIG
 # =========================
-MAX_CHUNK_SIZE = 2200
-MIN_CHUNK_SIZE = 600
+MAX_CHUNK_SIZE = settings.max_chunk_size
+MIN_CHUNK_SIZE = settings.min_chunk_size
+PARENT_BREAKPOINT_THRESHOLD = settings.parent_breakpoint_threshold
+PARENT_OVERLAP_SIZE = settings.parent_overlap_size
+CHILD_CHUNK_SIZE = settings.child_chunk_size
+CHILD_CHUNK_OVERLAP = settings.child_chunk_overlap
 
-PARENT_BREAKPOINT_THRESHOLD = 0.68
-PARENT_OVERLAP_SIZE = 120
-
-CHILD_CHUNK_SIZE = 500
-CHILD_CHUNK_OVERLAP = 100
-
-RERANK_CANDIDATE_MULTIPLIER = 4
-RERANK_MIN_CANDIDATES = 12
-AGENT_CHILD_USE_RERANK = True
 
 def build_header_prefix(metadata: dict) -> str:
     parts = []

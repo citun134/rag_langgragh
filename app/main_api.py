@@ -1,14 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 import tempfile
 import os
 import shutil
 import traceback
 from typing import Optional
 from app.security.access_control import build_document_metadata
-
+import json
 
 # ============================================================
 # Import từ code gốc của bạn — chỉnh lại đường dẫn nếu cần
@@ -147,15 +147,20 @@ async def query_rag(request: QueryRequest):
             )
 
         # Lấy sources nếu có
-        documents = result.get("documents") or result.get("context") or []
         sources = []
-        for doc in documents:
-            if hasattr(doc, "metadata"):
-                src = doc.metadata.get("source") or doc.metadata.get("filename", "")
-                if src:
-                    sources.append(src)
 
-        return QueryResponse(answer=answer, sources=list(set(sources)))
+        for msg in messages:
+            if isinstance(msg, ToolMessage):
+                try:
+                    payload = json.loads(msg.content)
+                    if isinstance(payload, dict) and payload.get("sources"):
+                        for src in payload["sources"]:
+                            if src:
+                                sources.append(src)
+                except Exception:
+                    pass
+
+        return QueryResponse(answer=answer, sources=sources)
 
     except Exception as e:
         traceback.print_exc()
@@ -177,4 +182,9 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "app.main_api:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )

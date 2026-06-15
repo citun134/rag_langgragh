@@ -24,6 +24,7 @@ from app.retrieval.context_builder import (
 from app.retrieval.hybrid_retriever import SmartHybridRetriever
 from app.security.access_control import build_access_filter
 
+from app.config.settings import settings
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -562,8 +563,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="data/eval/rag_eval_report.csv",
         help="Optional path to write a CSV report. Use empty string to skip.",
     )
-    parser.add_argument("--child-k", type=int, default=20)
-    parser.add_argument("--max-parents", type=int, default=4)
+    parser.add_argument("--child-k", type=int, default=settings.top_k_child)
+    parser.add_argument("--max-parents", type=int, default=settings.top_k_parent)
     parser.add_argument("--user-id", default="anonymous")
     parser.add_argument(
         "--role",
