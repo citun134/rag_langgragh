@@ -30,6 +30,23 @@ try:
 except Exception:
     pass
 
+def _doc_id_candidates(value: Any) -> set[str]:
+    raw = str(value or "").strip().lower().replace("\\", "/")
+    if not raw:
+        return set()
+
+    path_name = Path(raw).name
+
+    candidates = {
+        raw,
+        path_name,
+    }
+
+    # Nếu có lúc expected là stem không có .md
+    if "." in path_name:
+        candidates.add(Path(path_name).stem)
+
+    return {item for item in candidates if item}
 
 def _as_list(value: Any) -> List[str]:
     if value is None:
@@ -113,14 +130,20 @@ def _doc_aliases_from_result(item: dict) -> List[str]:
 
 
 def _doc_metrics(results: List[dict], expected_doc_ids: List[str]) -> Dict[str, float]:
-    expected = {_norm_id(item) for item in expected_doc_ids}
+    expected = set()
+    for item in expected_doc_ids:
+        expected.update(_doc_id_candidates(item))
+
     flags = []
 
     for item in results:
-        aliases = {_norm_id(alias) for alias in _doc_aliases_from_result(item)}
+        aliases = set()
+        for alias in _doc_aliases_from_result(item):
+            aliases.update(_doc_id_candidates(alias))
+
         flags.append(bool(aliases & expected))
 
-    return _ranking_metrics_from_flags(flags, len(expected))
+    return _ranking_metrics_from_flags(flags, len(expected_doc_ids))
 
 
 def _lcs_length(a: List[str], b: List[str]) -> int:

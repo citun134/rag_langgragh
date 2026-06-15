@@ -136,3 +136,4 @@ sentencepiece
 accelerate
 vnstock
 datasets
+rank_bm25
